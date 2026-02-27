@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from modules.doc_generator import extract_template_hints, generate_structured_doc
+from modules.doc_generator import generate_structured_doc
 from modules.pdf_extractor import extract_text_from_upload, get_extraction_capabilities
 from modules.translator import translate_text_structured
 
@@ -30,9 +30,10 @@ class TranslateRequest(BaseModel):
     text: str = Field(min_length=1)
     api_key: str = Field(min_length=1)
     model: str = "gpt-4.1"
-    template_hints: dict[str, Any] | None = None
     table_supplement: str = ""
     custom_glossary: str = ""
+    source_language: str = "auto"
+    domain_profile: str = "combined"
 
 
 class GenerateDocRequest(BaseModel):
@@ -40,9 +41,6 @@ class GenerateDocRequest(BaseModel):
     original_filename: str
     extraction_method: str = ""
     model_used: str = ""
-    template_fields: dict[str, Any] = Field(default_factory=dict)
-    template_heading_map: dict[str, Any] = Field(default_factory=dict)
-    user_template_base64: str | None = None
 
 
 class ProcessPipelineResponse(BaseModel):
@@ -56,9 +54,10 @@ def _run_translation_structured(
     text: str,
     api_key: str,
     model: str,
-    template_hints: dict[str, Any] | None,
     table_supplement: str,
     custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
 ) -> dict[str, Any]:
     params = inspect.signature(translate_text_structured).parameters
     kwargs: dict[str, Any] = {
@@ -67,12 +66,14 @@ def _run_translation_structured(
         "model": model,
         "progress_callback": None,
     }
-    if "template_hints" in params:
-        kwargs["template_hints"] = template_hints
     if "table_supplement" in params:
         kwargs["table_supplement"] = table_supplement
     if "custom_glossary" in params:
         kwargs["custom_glossary"] = custom_glossary
+    if "source_language" in params:
+        kwargs["source_language"] = source_language
+    if "domain_profile" in params:
+        kwargs["domain_profile"] = domain_profile
     return translate_text_structured(**kwargs)
 
 
@@ -81,32 +82,14 @@ def _run_generate_structured_doc(
     original_filename: str,
     extraction_method: str,
     model_used: str,
-    user_template_bytes: bytes | None,
-    template_fields: dict[str, Any],
-    template_heading_map: dict[str, Any],
 ) -> bytes:
-    params = inspect.signature(generate_structured_doc).parameters
     kwargs: dict[str, Any] = {
         "sections": sections,
         "original_filename": original_filename,
         "extraction_method": extraction_method,
         "model_used": model_used,
-        "user_template_bytes": user_template_bytes,
     }
-    if "template_fields" in params:
-        kwargs["template_fields"] = template_fields
-    if "template_heading_map" in params:
-        kwargs["template_heading_map"] = template_heading_map
     return generate_structured_doc(**kwargs)
-
-
-def _decode_template_from_base64(value: str | None) -> bytes | None:
-    if not value:
-        return None
-    try:
-        return base64.b64decode(value)
-    except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=400, detail="Invalid template base64 payload") from exc
 
 
 def _vision_ocr_image_bytes(
@@ -124,7 +107,7 @@ def _vision_ocr_image_bytes(
             {
                 "role": "system",
                 "content": (
-                    "You are a precise OCR engine for pharmaceutical COA documents. "
+                    "You are a precise OCR engine for regulated documents. "
                     "Extract all visible text exactly. "
                     "Do not summarize, translate, or add commentary."
                 ),
@@ -211,7 +194,7 @@ def _extract_with_openai_vision(
     }
 
 
-app = FastAPI(title="COA Translator API", version="3.0.0")
+app = FastAPI(title="Danila_AI API", version="4.0.0")
 
 allowed_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "*")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
@@ -234,13 +217,14 @@ def health() -> dict[str, bool]:
 def capabilities() -> dict[str, Any]:
     caps = get_extraction_capabilities()
     caps["has_vision_ocr"] = True
+    caps["source_languages"] = ["auto", "en", "zh"]
+    caps["domain_profiles"] = ["combined", "medical", "judicial_business"]
     return caps
 
 
 @app.post("/api/extract")
 async def extract(
     file: UploadFile = File(...),
-    template: UploadFile | None = File(None),
     api_key: str = Form(""),
     vision_ocr_model: str = Form("gpt-4o-mini"),
 ) -> JSONResponse:
@@ -258,16 +242,8 @@ async def extract(
         )
         if vision_result:
             extraction = vision_result
-    template_hints = None
-
-    if template is not None:
-        template_bytes = await template.read()
-        if template_bytes:
-            template_hints = extract_template_hints(template_bytes)
-
-    payload = {**extraction, "template_hints": template_hints}
     status_code = 200 if extraction.get("success") else 422
-    return JSONResponse(content=payload, status_code=status_code)
+    return JSONResponse(content=extraction, status_code=status_code)
 
 
 @app.post("/api/translate")
@@ -276,9 +252,10 @@ def translate(req: TranslateRequest) -> JSONResponse:
         text=req.text,
         api_key=req.api_key,
         model=req.model,
-        template_hints=req.template_hints,
         table_supplement=req.table_supplement,
         custom_glossary=req.custom_glossary,
+        source_language=req.source_language,
+        domain_profile=req.domain_profile,
     )
     status_code = 200 if result.get("success") else 422
     return JSONResponse(content=result, status_code=status_code)
@@ -286,16 +263,11 @@ def translate(req: TranslateRequest) -> JSONResponse:
 
 @app.post("/api/generate-doc")
 def generate_doc(req: GenerateDocRequest) -> StreamingResponse:
-    template_bytes = _decode_template_from_base64(req.user_template_base64)
-
     doc_bytes = _run_generate_structured_doc(
         sections=req.sections,
         original_filename=req.original_filename,
         extraction_method=req.extraction_method,
         model_used=req.model_used,
-        user_template_bytes=template_bytes,
-        template_fields=req.template_fields,
-        template_heading_map=req.template_heading_map,
     )
 
     base_name = Path(req.original_filename).stem or "coa"
@@ -318,20 +290,14 @@ async def process(
     file: UploadFile = File(...),
     api_key: str = Form(...),
     model: str = Form("gpt-4.1"),
-    template: UploadFile | None = File(None),
     custom_glossary: str = Form(""),
+    source_language: str = Form("auto"),
+    domain_profile: str = Form("combined"),
 ) -> ProcessPipelineResponse:
     try:
         file_bytes = await file.read()
         if not file_bytes:
             return ProcessPipelineResponse(success=False, error="Uploaded file is empty")
-
-        template_bytes = None
-        template_hints = None
-        if template is not None:
-            template_bytes = await template.read()
-            if template_bytes:
-                template_hints = extract_template_hints(template_bytes)
 
         extraction = extract_text_from_upload(file_bytes, filename=file.filename or "")
         if not extraction.get("success"):
@@ -341,9 +307,10 @@ async def process(
             text=extraction["text"],
             api_key=api_key,
             model=model,
-            template_hints=template_hints,
             table_supplement=extraction.get("table_supplement", ""),
             custom_glossary=custom_glossary,
+            source_language=source_language,
+            domain_profile=domain_profile,
         )
         if not translation.get("success"):
             return ProcessPipelineResponse(
@@ -358,14 +325,11 @@ async def process(
             original_filename=file.filename or "coa.pdf",
             extraction_method=extraction.get("method", "unknown"),
             model_used=translation.get("model_used", model),
-            user_template_bytes=template_bytes,
-            template_fields=translation.get("template_fields", {}),
-            template_heading_map=translation.get("template_heading_map", {}),
         )
 
         return ProcessPipelineResponse(
             success=True,
-            extraction={**extraction, "template_hints": template_hints},
+            extraction=extraction,
             translation={
                 **translation,
                 "docx_base64": base64.b64encode(doc_bytes).decode("utf-8"),

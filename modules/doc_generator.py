@@ -1,16 +1,9 @@
 """
 Word document generation module.
 
-Creates a formatted Russian-language COA Word document with a **fixed
-predefined structure**. Each output document always contains the same
-sections in the same order, regardless of the original PDF layout.
-
-Supports two modes:
-    1. **User-uploaded template** — a .docx file that contains Jinja2
-       placeholders (e.g. ``{{ product_name }}``, ``{{ test_results }}``).
-       Rendered via docxtpl.
-    2. **Built-in fixed structure** — generated from scratch via python-docx
-       using the section definitions in ``coa_structure.py``.
+Creates a formatted Russian-language Word document with a fixed predefined
+structure. Output order and section layout are controlled by the app, not by
+user-uploaded templates.
 """
 
 import io
@@ -145,23 +138,16 @@ def generate_structured_doc(
         original_filename: Name of the source PDF.
         extraction_method: Which extraction method produced the source text.
         model_used: OpenAI model used for the translation.
-        user_template_bytes: Optional .docx template uploaded by the user.
-                             Must contain Jinja2 placeholders matching the
-                             COA field keys.
-        template_fields: Optional AI-produced mapping for user template
-                         placeholders.
-        template_heading_map: Optional AI-produced mapping of template
-                              headings to COA section keys.
+        user_template_bytes: Compatibility-only argument; ignored.
+        template_fields: Compatibility-only argument; ignored.
+        template_heading_map: Compatibility-only argument; ignored.
 
     Returns:
         bytes of the generated .docx file.
     """
     if user_template_bytes:
-        return _render_user_template(
-            sections, original_filename, extraction_method, model_used,
-            user_template_bytes,
-            template_fields=template_fields,
-            template_heading_map=template_heading_map,
+        logger.info(
+            "Custom template payload ignored: Danila_AI always uses built-in document structure"
         )
 
     return _generate_fixed_structure(

@@ -12,11 +12,8 @@ type Capabilities = {
   has_ocr: boolean;
   has_camelot?: boolean;
   has_tabula?: boolean;
-};
-
-type TemplateHints = {
-  placeholders?: string[];
-  headings?: string[];
+  source_languages?: string[];
+  domain_profiles?: string[];
 };
 
 type ExtractionResult = {
@@ -26,15 +23,12 @@ type ExtractionResult = {
   text: string;
   table_supplement?: string;
   error?: string;
-  template_hints?: TemplateHints | null;
 };
 
 type TranslationResult = {
   success: boolean;
   translated_text: string;
   sections?: Record<string, unknown>;
-  template_fields?: Record<string, unknown>;
-  template_heading_map?: Record<string, unknown>;
   model_used?: string;
   chunks_translated?: number;
   error?: string;
@@ -58,16 +52,6 @@ function readFilenameFromContentDisposition(value: string | null): string | null
   }
   const match = value.match(/filename="?([^";]+)"?/i);
   return match ? match[1] : null;
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
 }
 
 function glossaryJsonToText(value: unknown): string {
@@ -235,10 +219,11 @@ export default function App() {
   const [apiKey, setApiKey] = useState("");
   const [modelChoice, setModelChoice] = useState("gpt-4.1");
   const [customModel, setCustomModel] = useState("");
+  const [sourceLanguage, setSourceLanguage] = useState("auto");
+  const [domainProfile, setDomainProfile] = useState("combined");
   const [glossaryFile, setGlossaryFile] = useState<File | null>(null);
 
   const [coaFile, setCoaFile] = useState<File | null>(null);
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
 
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
 
@@ -324,9 +309,6 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", coaFile);
-      if (templateFile) {
-        formData.append("template", templateFile);
-      }
       if (apiKey.trim()) {
         formData.append("api_key", apiKey.trim());
         formData.append("vision_ocr_model", "gpt-4o-mini");
@@ -396,9 +378,10 @@ export default function App() {
           text: extraction.text,
           api_key: apiKey.trim(),
           model: selectedModel,
-          template_hints: extraction.template_hints ?? null,
           table_supplement: extraction.table_supplement ?? "",
           custom_glossary: customGlossary,
+          source_language: sourceLanguage,
+          domain_profile: domainProfile,
         }),
       });
 
@@ -434,8 +417,6 @@ export default function App() {
     setGenerating(true);
 
     try {
-      const templateBase64 = templateFile ? await fileToBase64(templateFile) : null;
-
       const response = await fetch(buildUrl("/api/generate-doc"), {
         method: "POST",
         headers: {
@@ -446,9 +427,6 @@ export default function App() {
           original_filename: coaFile.name,
           extraction_method: extraction.method ?? "unknown",
           model_used: translation.model_used ?? selectedModel,
-          template_fields: translation.template_fields ?? {},
-          template_heading_map: translation.template_heading_map ?? {},
-          user_template_base64: templateBase64,
         }),
       });
 
@@ -500,13 +478,13 @@ export default function App() {
       <main className="mx-auto max-w-[1220px] px-4 py-6 md:px-8 md:py-10">
         <SpotlightCard className="p-6 md:p-8" delay={20}>
           <span className="inline-flex rounded-full border border-[#5E6AD2]/40 bg-[#5E6AD2]/15 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[#c8ceff]">
-            Pharmacopeia Workflow
+            Danila_AI Workflow
           </span>
           <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-[-0.03em] text-transparent md:text-6xl bg-gradient-to-b from-white via-white/95 to-white/70 bg-clip-text">
-            Pharmaceutical <span className="bg-[linear-gradient(90deg,#5E6AD2_0%,#8f98e8_46%,#5E6AD2_100%)] bg-[length:200%] bg-clip-text text-transparent animate-shimmer">COA Translator</span>
+            Danila_AI <span className="bg-[linear-gradient(90deg,#5E6AD2_0%,#8f98e8_46%,#5E6AD2_100%)] bg-[length:200%] bg-clip-text text-transparent animate-shimmer">Translator</span>
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-relaxed text-fgMuted">
-            Rebuilt UI with a proper API architecture. Core extraction, translation, and DOCX logic remain unchanged.
+            OCR extraction, bilingual translation (English/Chinese to Russian), and fixed-structure DOCX export for medical/pharmacopeia and judicial/business documents.
           </p>
         </SpotlightCard>
 
@@ -540,6 +518,32 @@ export default function App() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="mb-1 block text-xs text-fgMuted">Source language</label>
+                  <select
+                    className="select"
+                    value={sourceLanguage}
+                    onChange={(e) => setSourceLanguage(e.target.value)}
+                  >
+                    <option value="auto">Auto (English/Chinese)</option>
+                    <option value="en">English</option>
+                    <option value="zh">Chinese</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs text-fgMuted">Domain profile</label>
+                  <select
+                    className="select"
+                    value={domainProfile}
+                    onChange={(e) => setDomainProfile(e.target.value)}
+                  >
+                    <option value="combined">Medical + Judicial/Business</option>
+                    <option value="medical">Medical/Pharmacopeia</option>
+                    <option value="judicial_business">Judicial/Business</option>
+                  </select>
+                </div>
+
                 {modelChoice === "custom" ? (
                   <div>
                     <label className="mb-1 block text-xs text-fgMuted">Custom model ID</label>
@@ -561,7 +565,7 @@ export default function App() {
                     onChange={(e) => setGlossaryFile(e.target.files?.[0] ?? null)}
                   />
                   <p className="mt-1 text-xs text-fgMuted">
-                    Format examples: English =&gt; Russian, CSV two columns, or JSON map.
+                    Format examples: EN/ZH =&gt; RU, CSV two columns, or JSON map.
                   </p>
                   {glossaryFile ? (
                     <p className="mt-1 text-xs text-emerald-300">
@@ -578,6 +582,15 @@ export default function App() {
                     </a>
                     <a className="link-subtle" href="https://www.edqm.eu/en/european-pharmacopoeia" target="_blank" rel="noreferrer">
                       European Pharmacopoeia (EDQM)
+                    </a>
+                    <a className="link-subtle" href="https://unterm.un.org/unterm2/" target="_blank" rel="noreferrer">
+                      UNTERM (multilingual legal/business terms)
+                    </a>
+                    <a className="link-subtle" href="/glossaries/judicial_en_ru_sample.json" target="_blank" rel="noreferrer">
+                      Judicial EN-RU JSON sample
+                    </a>
+                    <a className="link-subtle" href="/glossaries/judicial_zh_ru_sample.json" target="_blank" rel="noreferrer">
+                      Judicial ZH-RU JSON sample
                     </a>
                   </div>
                 </div>
@@ -598,6 +611,12 @@ export default function App() {
                 <p>
                   Tables: <span className="text-fg">{capabilities?.has_camelot || capabilities?.has_tabula ? "advanced extractors ready" : "baseline only"}</span>
                 </p>
+                <p>
+                  Source modes: <span className="text-fg">{(capabilities?.source_languages ?? ["auto", "en", "zh"]).join(", ")}</span>
+                </p>
+                <p>
+                  Domain modes: <span className="text-fg">{(capabilities?.domain_profiles ?? ["combined", "medical", "judicial_business"]).join(", ")}</span>
+                </p>
               </div>
             </SpotlightCard>
           </aside>
@@ -607,28 +626,18 @@ export default function App() {
               <form onSubmit={onExtract}>
                 <StepHeader
                   step="Step 1"
-                  title="Upload COA + Optional Template"
-                  subtitle="Supports PDF and image files. Template stays optional and is applied at DOCX generation."
+                  title="Upload Source Document"
+                  subtitle="Supports PDF and image files for OCR/text extraction."
                 />
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4">
                   <div>
-                    <label className="mb-1 block text-xs text-fgMuted">COA file</label>
+                    <label className="mb-1 block text-xs text-fgMuted">Document file</label>
                     <input
                       className="file"
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp"
                       onChange={(e) => setCoaFile(e.target.files?.[0] ?? null)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs text-fgMuted">Word structure template (.docx, optional)</label>
-                    <input
-                      className="file"
-                      type="file"
-                      accept=".docx"
-                      onChange={(e) => setTemplateFile(e.target.files?.[0] ?? null)}
                     />
                   </div>
                 </div>
@@ -658,12 +667,6 @@ export default function App() {
                       Method: <span className="text-fg">{extraction.method}</span> | Pages: <span className="text-fg">{extraction.page_count ?? 0}</span> | Characters: <span className="text-fg">{extraction.text.length.toLocaleString()}</span>
                     </p>
                     <textarea className="textarea h-64" readOnly value={extraction.text} />
-
-                    {extraction.template_hints ? (
-                      <p className="mt-3 text-xs text-fgMuted">
-                        Template hints loaded: {(extraction.template_hints.placeholders ?? []).length} placeholders, {(extraction.template_hints.headings ?? []).length} heading hints.
-                      </p>
-                    ) : null}
                   </>
                 ) : (
                   <p className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -678,7 +681,7 @@ export default function App() {
                 <StepHeader
                   step="Step 3"
                   title="Translate to Russian"
-                  subtitle="High-fidelity full translation with glossary and section mapping."
+                  subtitle="High-fidelity translation with domain terminology controls and section mapping."
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -711,7 +714,7 @@ export default function App() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs text-fgMuted">English source</label>
+                        <label className="mb-1 block text-xs text-fgMuted">Source text</label>
                         <textarea className="textarea h-64" readOnly value={extraction?.text ?? ""} />
                       </div>
                       <div>
@@ -771,10 +774,10 @@ export default function App() {
                 <StepHeader
                   step="Step 4"
                   title="Export Clean DOCX"
-                  subtitle="Uses your optional template if provided, otherwise fixed structured output."
+                  subtitle="Danila_AI always uses its own structured Word layout."
                 />
                 <button className="btn-primary min-w-[220px]" type="button" onClick={onGenerateDoc} disabled={generating}>
-                  {generating ? "Generating DOCX..." : "Download Translated COA (.docx)"}
+                  {generating ? "Generating DOCX..." : "Download Translated Document (.docx)"}
                 </button>
               </SpotlightCard>
             ) : null}

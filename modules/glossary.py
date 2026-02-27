@@ -1,299 +1,212 @@
 """
-Pharmaceutical and medicinal glossary for English-to-Russian translation.
+Domain-aware glossary helpers for EN/ZH -> RU translation.
 
-Contains common pharma/COA terms and their standard Russian translations
-to ensure consistency and accuracy in Certificate of Analysis translations.
+Danila_AI supports two domain families:
+1) medical/pharmacopeia
+2) judicial/business
+
+Glossary output is consumed by prompt-building code in modules/translator.py.
 """
 
-# Comprehensive pharmaceutical glossary: English -> Russian
-PHARMA_GLOSSARY = {
-    # Document types and headers
+from __future__ import annotations
+
+from collections import OrderedDict
+
+SUPPORTED_SOURCE_LANGUAGES = ("auto", "en", "zh")
+SUPPORTED_DOMAIN_PROFILES = ("combined", "medical", "judicial_business")
+
+
+MEDICAL_EN_RU = {
     "Certificate of Analysis": "Сертификат анализа",
     "COA": "Сертификат анализа",
-    "Certificate of Compliance": "Сертификат соответствия",
-    "Material Safety Data Sheet": "Паспорт безопасности материала",
-    "MSDS": "Паспорт безопасности материала",
-    "Batch Record": "Протокол серии",
     "Specification": "Спецификация",
-
-    # Product identification
     "Product Name": "Наименование продукта",
-    "Trade Name": "Торговое наименование",
-    "Generic Name": "Международное непатентованное наименование",
-    "INN": "МНН",
-    "International Nonproprietary Name": "Международное непатентованное наименование",
     "Batch Number": "Номер серии",
-    "Batch No.": "Номер серии",
-    "Batch No": "Номер серии",
     "Lot Number": "Номер серии",
-    "Lot No.": "Номер серии",
-    "Lot No": "Номер серии",
     "Manufacturing Date": "Дата производства",
-    "Date of Manufacture": "Дата производства",
     "Expiry Date": "Срок годности",
-    "Expiration Date": "Срок годности",
     "Retest Date": "Дата переконтроля",
-    "Shelf Life": "Срок хранения",
-
-    # Manufacturer info
     "Manufacturer": "Производитель",
     "Supplier": "Поставщик",
-    "Country of Origin": "Страна происхождения",
-    "Manufacturing Site": "Производственная площадка",
-    "Quality Control": "Контроль качества",
-    "Quality Assurance": "Обеспечение качества",
-    "QC": "Контроль качества",
-    "QA": "Обеспечение качества",
-    "Approved by": "Утверждено",
-    "Released by": "Выпущено",
-    "Authorized Person": "Уполномоченное лицо",
-
-    # Test parameters and methods
     "Test": "Испытание",
     "Test Method": "Метод испытания",
-    "Method": "Метод",
     "Result": "Результат",
-    "Results": "Результаты",
     "Acceptance Criteria": "Критерии приемлемости",
-    "Limit": "Предел",
-    "Limits": "Пределы",
-    "Specification Limit": "Предел спецификации",
-    "Upper Limit": "Верхний предел",
-    "Lower Limit": "Нижний предел",
-    "Reference Standard": "Стандартный образец",
-
-    # Physical tests
     "Appearance": "Внешний вид",
-    "Description": "Описание",
-    "Color": "Цвет",
-    "Odor": "Запах",
-    "Taste": "Вкус",
-    "Physical Form": "Физическая форма",
-    "Crystal Form": "Кристаллическая форма",
-    "Polymorphic Form": "Полиморфная форма",
-    "Particle Size": "Размер частиц",
-    "Particle Size Distribution": "Распределение частиц по размерам",
-    "Bulk Density": "Насыпная плотность",
-    "Tapped Density": "Плотность после утряски",
-    "Flowability": "Сыпучесть",
-    "Solubility": "Растворимость",
-    "Melting Point": "Температура плавления",
-    "Boiling Point": "Температура кипения",
-    "Viscosity": "Вязкость",
-    "pH": "pH",
-    "Specific Gravity": "Удельная масса",
-    "Density": "Плотность",
-    "Refractive Index": "Показатель преломления",
-    "Optical Rotation": "Оптическое вращение",
-    "Specific Rotation": "Удельное вращение",
-
-    # Chemical tests
     "Assay": "Количественное определение",
     "Purity": "Чистота",
-    "Potency": "Активность",
-    "Content": "Содержание",
-    "Active Ingredient": "Действующее вещество",
-    "Active Pharmaceutical Ingredient": "Активная фармацевтическая субстанция",
-    "API": "АФС",
-    "Excipient": "Вспомогательное вещество",
     "Impurities": "Примеси",
     "Related Substances": "Родственные примеси",
-    "Degradation Products": "Продукты деградации",
     "Residual Solvents": "Остаточные растворители",
-    "Heavy Metals": "Тяжёлые металлы",
-    "Elemental Impurities": "Элементные примеси",
-    "Residue on Ignition": "Остаток после прокаливания",
-    "Sulfated Ash": "Сульфатная зола",
+    "Heavy Metals": "Тяжелые металлы",
     "Loss on Drying": "Потеря в массе при высушивании",
     "Water Content": "Содержание воды",
-    "Moisture Content": "Содержание влаги",
-    "Karl Fischer": "Карл Фишер",
-    "Organic Impurities": "Органические примеси",
-    "Inorganic Impurities": "Неорганические примеси",
-    "Specified Impurity": "Идентифицированная примесь",
-    "Unspecified Impurity": "Неидентифицированная примесь",
-    "Total Impurities": "Сумма примесей",
     "Identification": "Идентификация",
-    "Identity": "Подлинность",
-
-    # Analytical methods
     "HPLC": "ВЭЖХ",
-    "High Performance Liquid Chromatography": "Высокоэффективная жидкостная хроматография",
     "GC": "ГХ",
-    "Gas Chromatography": "Газовая хроматография",
-    "TLC": "ТСХ",
-    "Thin Layer Chromatography": "Тонкослойная хроматография",
-    "UV": "УФ",
-    "UV/Vis": "УФ/Вид",
-    "Ultraviolet": "Ультрафиолетовый",
-    "Infrared": "Инфракрасный",
     "IR": "ИК",
-    "FTIR": "ИК-Фурье",
-    "NMR": "ЯМР",
-    "Nuclear Magnetic Resonance": "Ядерный магнитный резонанс",
-    "Mass Spectrometry": "Масс-спектрометрия",
-    "MS": "МС",
-    "LC-MS": "ЖХ-МС",
-    "GC-MS": "ГХ-МС",
-    "ICP": "ИСП",
-    "ICP-MS": "ИСП-МС",
-    "ICP-OES": "ИСП-ОЭС",
-    "X-Ray Diffraction": "Рентгеновская дифракция",
-    "XRD": "РД",
-    "DSC": "ДСК",
-    "Differential Scanning Calorimetry": "Дифференциальная сканирующая калориметрия",
-    "Titration": "Титрование",
-    "Potentiometric Titration": "Потенциометрическое титрование",
-    "Conductivity": "Электропроводность",
-    "Polarimetry": "Поляриметрия",
-
-    # Microbiological tests
-    "Microbial Limits": "Микробиологическая чистота",
-    "Microbial Limit Test": "Испытание на микробиологическую чистоту",
-    "Total Aerobic Microbial Count": "Общее число аэробных микроорганизмов",
-    "TAMC": "ОАКМ",
-    "Total Yeast and Mold Count": "Общее число дрожжей и плесневых грибов",
-    "TYMC": "ОДПГ",
-    "Bacterial Endotoxins": "Бактериальные эндотоксины",
-    "Endotoxin": "Эндотоксин",
-    "Sterility": "Стерильность",
-    "Sterility Test": "Испытание на стерильность",
-    "Bioburden": "Микробная нагрузка",
-    "Colony Forming Units": "Колониеобразующие единицы",
-    "CFU": "КОЕ",
-    "E. coli": "E. coli",
-    "Salmonella": "Сальмонелла",
-    "Staphylococcus aureus": "Staphylococcus aureus",
-    "Pseudomonas aeruginosa": "Pseudomonas aeruginosa",
-    "Absence": "Отсутствие",
-    "Absent": "Отсутствует",
-    "Detected": "Обнаружено",
-    "Not Detected": "Не обнаружено",
-    "LAL Test": "ЛАЛ-тест",
-
-    # Dosage forms
-    "Tablet": "Таблетка",
-    "Tablets": "Таблетки",
-    "Capsule": "Капсула",
-    "Capsules": "Капсулы",
-    "Injection": "Инъекция",
-    "Solution": "Раствор",
-    "Suspension": "Суспензия",
-    "Ointment": "Мазь",
-    "Cream": "Крем",
-    "Gel": "Гель",
-    "Powder": "Порошок",
-    "Granules": "Гранулы",
-    "Syrup": "Сироп",
-    "Suppository": "Суппозиторий",
-    "Lyophilized Powder": "Лиофилизированный порошок",
-    "Film-coated Tablet": "Таблетка, покрытая плёночной оболочкой",
-    "Film-coated Tablets": "Таблетки, покрытые плёночной оболочкой",
-    "Oral Solution": "Раствор для приёма внутрь",
-    "Solution for Injection": "Раствор для инъекций",
-
-    # Packaging and storage
+    "USP": "Фармакопея США",
+    "EP": "Европейская фармакопея",
+    "Pharmacopeia": "Фармакопея",
     "Storage Conditions": "Условия хранения",
-    "Store at": "Хранить при",
-    "Room Temperature": "Комнатная температура",
-    "Protect from Light": "Защищать от света",
-    "Protect from Moisture": "Защищать от влаги",
-    "Keep in a Dry Place": "Хранить в сухом месте",
-    "Container": "Контейнер",
-    "Package": "Упаковка",
-    "Primary Packaging": "Первичная упаковка",
-    "Secondary Packaging": "Вторичная упаковка",
-    "Blister Pack": "Блистерная упаковка",
-    "Vial": "Флакон",
-    "Ampoule": "Ампула",
-
-    # Units and measurements
-    "Not More Than": "Не более",
-    "Not Less Than": "Не менее",
-    "NMT": "Не более",
-    "NLT": "Не менее",
     "Conforms": "Соответствует",
     "Complies": "Соответствует",
-    "Does not comply": "Не соответствует",
-    "Passes": "Выдерживает",
-    "Pass": "Выдерживает",
-    "Fail": "Не выдерживает",
-    "Within specification": "В пределах спецификации",
-    "Out of specification": "Вне спецификации",
-    "OOS": "Вне спецификации",
-    "mg": "мг",
-    "mcg": "мкг",
-    "µg": "мкг",
-    "mL": "мл",
-    "mg/mL": "мг/мл",
-    "mg/g": "мг/г",
-    "IU": "МЕ",
-    "International Unit": "Международная единица",
-    "EU/mL": "ЕЭ/мл",
-    "Endotoxin Unit": "Единица эндотоксина",
-
-    # Regulatory references
-    "USP": "Фармакопея США",
-    "EP": "Европейская Фармакопея",
-    "BP": "Британская Фармакопея",
-    "JP": "Японская Фармакопея",
-    "Ph. Eur.": "Европейская Фармакопея",
-    "Pharmacopoeia": "Фармакопея",
-    "Pharmacopeia": "Фармакопея",
-    "GMP": "GMP (Надлежащая производственная практика)",
-    "Good Manufacturing Practice": "Надлежащая производственная практика",
-    "ICH": "ICH",
-    "In-house Method": "Внутренний метод",
-    "Compendial Method": "Фармакопейный метод",
-
-    # Stability
-    "Stability": "Стабильность",
-    "Stability Study": "Исследование стабильности",
-    "Accelerated Stability": "Ускоренная стабильность",
-    "Long-term Stability": "Долгосрочная стабильность",
-    "Intermediate Stability": "Промежуточная стабильность",
-    "Dissolution": "Растворение",
-    "Dissolution Test": "Испытание растворения",
-    "Disintegration": "Распадаемость",
-    "Disintegration Test": "Испытание на распадаемость",
-    "Friability": "Истираемость",
-    "Hardness": "Твёрдость",
-    "Uniformity of Dosage Units": "Однородность дозирования",
-    "Content Uniformity": "Однородность содержания",
-    "Weight Variation": "Отклонение в массе",
-
-    # Common COA result phrases
-    "White to off-white powder": "Белый или почти белый порошок",
-    "White crystalline powder": "Белый кристаллический порошок",
-    "Clear colorless solution": "Прозрачный бесцветный раствор",
-    "Clear to slightly opalescent": "Прозрачный до слегка опалесцирующего",
-    "Practically insoluble in water": "Практически нерастворим в воде",
-    "Freely soluble in water": "Легко растворим в воде",
-    "Soluble in water": "Растворим в воде",
-    "Slightly soluble in water": "Мало растворим в воде",
-    "Sparingly soluble in water": "Умеренно растворим в воде",
-    "Positive": "Положительный",
-    "Negative": "Отрицательный",
-    "Consistent with reference": "Соответствует стандарту",
-    "Consistent with standard": "Соответствует стандарту",
-    "as is basis": "в пересчёте на исходное вещество",
-    "on dried basis": "в пересчёте на сухое вещество",
-    "on anhydrous basis": "в пересчёте на безводное вещество",
-    "as received": "в исходном виде",
+    "Not Detected": "Не обнаружено",
 }
 
 
-def get_glossary_prompt_section() -> str:
-    """
-    Build a formatted glossary section to include in the translation prompt.
-    Returns a string with key pharmaceutical terms and their Russian equivalents.
-    """
-    lines = []
-    for eng, rus in PHARMA_GLOSSARY.items():
-        lines.append(f"  \"{eng}\" → \"{rus}\"")
-    return "\n".join(lines)
+MEDICAL_ZH_RU = {
+    "分析证书": "Сертификат анализа",
+    "产品名称": "Наименование продукта",
+    "批号": "Номер серии",
+    "生产日期": "Дата производства",
+    "有效期": "Срок годности",
+    "复验期": "Дата переконтроля",
+    "生产商": "Производитель",
+    "供应商": "Поставщик",
+    "检验项目": "Испытание",
+    "检验方法": "Метод испытания",
+    "结果": "Результат",
+    "标准": "Критерии приемлемости",
+    "外观": "Внешний вид",
+    "含量测定": "Количественное определение",
+    "纯度": "Чистота",
+    "杂质": "Примеси",
+    "有关物质": "Родственные примеси",
+    "残留溶剂": "Остаточные растворители",
+    "重金属": "Тяжелые металлы",
+    "干燥失重": "Потеря в массе при высушивании",
+    "水分": "Содержание воды",
+    "鉴别": "Идентификация",
+    "储存条件": "Условия хранения",
+    "符合规定": "Соответствует",
+    "未检出": "Не обнаружено",
+}
 
 
-def get_glossary_dict() -> dict:
-    """Return the full glossary dictionary."""
-    return PHARMA_GLOSSARY.copy()
+JUDICIAL_BUSINESS_EN_RU = {
+    "Agreement": "Соглашение",
+    "Contract": "Договор",
+    "Party": "Сторона",
+    "Parties": "Стороны",
+    "Counterparty": "Контрагент",
+    "Governing Law": "Применимое право",
+    "Jurisdiction": "Юрисдикция",
+    "Arbitration": "Арбитраж",
+    "Dispute Resolution": "Разрешение споров",
+    "Confidentiality": "Конфиденциальность",
+    "Non-Disclosure Agreement": "Соглашение о неразглашении",
+    "Liability": "Ответственность",
+    "Indemnification": "Возмещение убытков",
+    "Damages": "Убытки",
+    "Force Majeure": "Форс-мажор",
+    "Termination": "Расторжение",
+    "Breach": "Нарушение",
+    "Claim": "Требование",
+    "Plaintiff": "Истец",
+    "Defendant": "Ответчик",
+    "Judgment": "Судебное решение",
+    "Court": "Суд",
+    "Regulation": "Нормативный акт",
+    "Compliance": "Соблюдение требований",
+    "Invoice": "Счет",
+    "Payment Terms": "Условия оплаты",
+    "Purchase Order": "Заказ на поставку",
+    "Statement of Work": "Техническое задание",
+    "Annex": "Приложение",
+    "Appendix": "Приложение",
+    "Seal": "Печать",
+    "Authorized Signatory": "Уполномоченный подписант",
+}
+
+
+JUDICIAL_BUSINESS_ZH_RU = {
+    "合同": "Договор",
+    "协议": "Соглашение",
+    "甲方": "Сторона А",
+    "乙方": "Сторона Б",
+    "适用法律": "Применимое право",
+    "管辖权": "Юрисдикция",
+    "仲裁": "Арбитраж",
+    "争议解决": "Разрешение споров",
+    "保密": "Конфиденциальность",
+    "违约": "Нарушение",
+    "赔偿": "Возмещение убытков",
+    "责任": "Ответственность",
+    "不可抗力": "Форс-мажор",
+    "终止": "Расторжение",
+    "诉讼": "Судебный процесс",
+    "原告": "Истец",
+    "被告": "Ответчик",
+    "法院": "Суд",
+    "判决": "Судебное решение",
+    "合规": "Соблюдение требований",
+    "付款条件": "Условия оплаты",
+    "发票": "Счет",
+    "采购订单": "Заказ на поставку",
+    "附件": "Приложение",
+    "盖章": "Печать",
+    "授权签字人": "Уполномоченный подписант",
+}
+
+
+def _merge_glossaries(*items: dict[str, str]) -> dict[str, str]:
+    merged: OrderedDict[str, str] = OrderedDict()
+    for glossary in items:
+        for key, value in glossary.items():
+            merged[key] = value
+    return dict(merged)
+
+
+def _normalise_source_language(source_language: str) -> str:
+    value = (source_language or "").strip().lower()
+    return value if value in SUPPORTED_SOURCE_LANGUAGES else "auto"
+
+
+def _normalise_domain_profile(domain_profile: str) -> str:
+    value = (domain_profile or "").strip().lower()
+    return value if value in SUPPORTED_DOMAIN_PROFILES else "combined"
+
+
+def get_glossary_dict(
+    source_language: str = "auto",
+    domain_profile: str = "combined",
+) -> dict[str, str]:
+    """
+    Return merged glossary dict for selected source language + domain profile.
+    """
+    lang = _normalise_source_language(source_language)
+    domain = _normalise_domain_profile(domain_profile)
+
+    use_en = lang in ("auto", "en")
+    use_zh = lang in ("auto", "zh")
+
+    include_medical = domain in ("combined", "medical")
+    include_judicial = domain in ("combined", "judicial_business")
+
+    parts: list[dict[str, str]] = []
+
+    if include_medical and use_en:
+        parts.append(MEDICAL_EN_RU)
+    if include_medical and use_zh:
+        parts.append(MEDICAL_ZH_RU)
+    if include_judicial and use_en:
+        parts.append(JUDICIAL_BUSINESS_EN_RU)
+    if include_judicial and use_zh:
+        parts.append(JUDICIAL_BUSINESS_ZH_RU)
+
+    return _merge_glossaries(*parts)
+
+
+def get_glossary_prompt_section(
+    source_language: str = "auto",
+    domain_profile: str = "combined",
+) -> str:
+    """
+    Build formatted glossary lines for inclusion in the translator prompt.
+    """
+    glossary = get_glossary_dict(
+        source_language=source_language,
+        domain_profile=domain_profile,
+    )
+    return "\n".join(f'  "{src}" -> "{dst}"' for src, dst in glossary.items())

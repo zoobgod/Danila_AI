@@ -1,8 +1,8 @@
 """
-OpenAI-based translation module for pharmaceutical COA documents.
+OpenAI-based translation module for Danila_AI document workflows.
 
-Translates English text to Russian with pharmaceutical-specific context
-and glossary enforcement.
+Translates English or Chinese source text to Russian with domain-aware
+terminology controls (medical/pharmacopeia and judicial/business).
 
 Supports two output modes:
     - **structured**: Returns a dict mapping predefined COA section keys
@@ -36,8 +36,8 @@ CUSTOM_GLOSSARY_MAX_CHARS = 24000
 # ---------------------------------------------------------------------------
 
 _GLOSSARY_RULES = """\
-MANDATORY PHARMACEUTICAL GLOSSARY (English → Russian) — always prefer these \
-over any generic translation:
+MANDATORY DOMAIN GLOSSARY (source -> Russian) - always prefer these terms \
+over generic translation:
 {glossary}
 """
 
@@ -48,46 +48,47 @@ USER-PROVIDED GLOSSARY (highest priority; override defaults when conflicts exist
 
 _COMMON_RULES = """\
 Translation rules (apply to ALL output):
-1. Translate ALL English text to Russian.
-2. Keep numerical values, chemical formulas, CAS numbers, and catalog numbers UNCHANGED.
-3. Keep Latin scientific names in their original Latin form.
-4. Use the pharmaceutical glossary below for standard terminology — these \
-translations are mandatory.
-5. Maintain standard Russian pharmaceutical terminology consistent with the \
-Russian Pharmacopoeia (Государственная Фармакопея).
-6. Keep internationally-recognised abbreviations (pH, HPLC, GC, etc.) but \
-provide the Russian equivalent from the glossary in parentheses where it \
-first appears.
-7. Do NOT add explanations, comments, or notes of your own — translate only.
-8. NEVER summarize or compress content; preserve all meaningful lines, \
-table rows, and metadata from the source.
+1. Translate ALL source text to Russian.
+2. Source language handling: {source_language_instruction}
+3. Domain handling: {domain_instruction}
+4. Never leave source segments untranslated unless they are protected items listed below.
+5. Keep numerical values, units, formulas, CAS numbers, catalog numbers, legal article numbers, and clause numbering UNCHANGED.
+6. Keep Latin scientific names in their original Latin form.
+7. Use the provided glossary below as mandatory terminology.
+8. Keep standard Russian terminology consistent with applicable domain standards.
+9. Keep internationally recognised abbreviations (for example pH, HPLC, GC) and provide Russian equivalent from glossary where needed.
+10. Do NOT add explanations, comments, or notes of your own.
+11. NEVER summarize or compress content; preserve all meaningful lines, table rows, headers, and metadata.
 """
 
 PLAIN_SYSTEM_PROMPT = """\
-You are a professional pharmaceutical translator specialising in translating \
-Certificate of Analysis (COA) documents from English to Russian.
+You are a professional translator for regulated documents.
+
+Primary output language: Russian.
+Target domain profile: {domain_profile_label}.
+Source language mode: {source_language_label}.
 
 {common_rules}
 
 {glossary_section}
 
-Output ONLY the translated text — no JSON, no markdown fences, no commentary.
+Output ONLY the translated text - no JSON, no markdown fences, no commentary.
 Preserve the original document layout as closely as possible.
 Preserve any table structure using | as the column delimiter.
-Do not omit any lines, rows, limits, footnotes, or acceptance criteria.
+Do not omit lines, rows, limits, footnotes, acceptance criteria, legal clauses, or signatures.
 """
 
 STRUCTURE_MAPPING_SYSTEM_PROMPT = """\
-You are a pharmaceutical document structuring expert.
+You are a document structuring expert for medical/pharmacopeia and judicial/business content.
 
 You will receive:
-1) A FULL Russian translation of a COA.
+1) A FULL Russian translation of the source document.
 2) Optional supplemental extracted test tables.
 
 Your task is to map content into the predefined JSON structure.
 Do not summarize. Preserve complete test data in "test_results".
 
-OUTPUT FORMAT — return valid JSON only with these keys:
+OUTPUT FORMAT - return valid JSON only with these keys:
 {{
 {json_keys},
   "template_fields": {{}},
@@ -106,16 +107,76 @@ Rules:
 """
 
 
-def _build_system_prompt(structured: bool, custom_glossary: str = "") -> str:
-    glossary_text = _build_combined_glossary(custom_glossary)
+def _normalise_source_language(source_language: str) -> str:
+    value = (source_language or "").strip().lower()
+    return value if value in {"auto", "en", "zh"} else "auto"
+
+
+def _normalise_domain_profile(domain_profile: str) -> str:
+    value = (domain_profile or "").strip().lower()
+    return value if value in {"combined", "medical", "judicial_business"} else "combined"
+
+
+def _source_language_instruction(source_language: str) -> str:
+    lang = _normalise_source_language(source_language)
+    if lang == "en":
+        return "Treat source text as English only."
+    if lang == "zh":
+        return "Treat source text as Simplified Chinese only."
+    return "Auto-detect English and Simplified Chinese per line/segment before translation."
+
+
+def _source_language_label(source_language: str) -> str:
+    labels = {
+        "auto": "Auto (English/Chinese)",
+        "en": "English",
+        "zh": "Chinese",
+    }
+    return labels[_normalise_source_language(source_language)]
+
+
+def _domain_instruction(domain_profile: str) -> str:
+    profile = _normalise_domain_profile(domain_profile)
+    if profile == "medical":
+        return "Prioritise medical and pharmacopeia terminology."
+    if profile == "judicial_business":
+        return "Prioritise judicial and business terminology."
+    return "Apply both medical/pharmacopeia and judicial/business terminology rules."
+
+
+def _domain_label(domain_profile: str) -> str:
+    labels = {
+        "combined": "Medical + Judicial/Business",
+        "medical": "Medical/Pharmacopeia",
+        "judicial_business": "Judicial/Business",
+    }
+    return labels[_normalise_domain_profile(domain_profile)]
+
+
+def _build_system_prompt(
+    structured: bool,
+    custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
+) -> str:
+    glossary_text = _build_combined_glossary(
+        custom_glossary=custom_glossary,
+        source_language=source_language,
+        domain_profile=domain_profile,
+    )
     glossary_section = _GLOSSARY_RULES.format(glossary=glossary_text)
-    common_rules = _COMMON_RULES
+    common_rules = _COMMON_RULES.format(
+        source_language_instruction=_source_language_instruction(source_language),
+        domain_instruction=_domain_instruction(domain_profile),
+    )
 
     if structured:
         return _build_structuring_prompt()
     return PLAIN_SYSTEM_PROMPT.format(
         common_rules=common_rules,
         glossary_section=glossary_section,
+        source_language_label=_source_language_label(source_language),
+        domain_profile_label=_domain_label(domain_profile),
     )
 
 
@@ -176,9 +237,11 @@ def translate_text(
     model: str = "gpt-4o",
     progress_callback: Optional[callable] = None,
     custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
 ) -> dict:
     """
-    Translate pharmaceutical COA text from English to Russian using OpenAI.
+    Translate source text (English/Chinese) to Russian using OpenAI.
 
     Returns a **plain** translation (single text string) suitable for preview
     and for the legacy document-generation path.
@@ -189,6 +252,8 @@ def translate_text(
         model,
         progress_callback,
         custom_glossary=custom_glossary,
+        source_language=source_language,
+        domain_profile=domain_profile,
     )
 
 
@@ -200,9 +265,11 @@ def translate_text_structured(
     template_hints: Optional[dict] = None,
     table_supplement: str = "",
     custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
 ) -> dict:
     """
-    Translate pharmaceutical COA text and return **structured** output — a
+    Translate document text and return **structured** output - a
     dict keyed by the predefined COA section keys with Russian values.
 
     Returns:
@@ -219,6 +286,8 @@ def translate_text_structured(
         template_hints=template_hints,
         table_supplement=table_supplement,
         custom_glossary=custom_glossary,
+        source_language=source_language,
+        domain_profile=domain_profile,
     )
 
 
@@ -232,6 +301,8 @@ def _translate_plain(
     model: str,
     progress_callback: Optional[callable],
     custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
 ) -> dict:
     if not text.strip():
         return _error_result("No text provided for translation", model)
@@ -241,6 +312,8 @@ def _translate_plain(
         system_prompt = _build_system_prompt(
             structured=False,
             custom_glossary=custom_glossary,
+            source_language=source_language,
+            domain_profile=domain_profile,
         )
         chunks = _chunk_text(text)
         translated_parts: list[str] = []
@@ -250,9 +323,11 @@ def _translate_plain(
                 progress_callback(i + 1, len(chunks))
 
             user_message = (
-                "Translate the following pharmaceutical COA text from English "
-                "to Russian. Output ONLY the translation, nothing else. "
-                "Do not omit any lines or table rows.\n\n"
+                "Translate the following text to Russian. "
+                f"Source language mode: {_source_language_label(source_language)}. "
+                f"Domain profile: {_domain_label(domain_profile)}. "
+                "Output ONLY the translation, nothing else. "
+                "Do not omit any lines, clauses, signatures, or table rows.\n\n"
                 + chunk
             )
 
@@ -296,6 +371,8 @@ def _translate_structured(
     template_hints: Optional[dict] = None,
     table_supplement: str = "",
     custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
 ) -> dict:
     if not text.strip():
         return _error_result("No text provided for translation", model)
@@ -311,6 +388,8 @@ def _translate_structured(
             model,
             None,
             custom_glossary=custom_glossary,
+            source_language=source_language,
+            domain_profile=domain_profile,
         )
         if not plain_result["success"]:
             return plain_result
@@ -361,6 +440,8 @@ def _translate_structured(
             model,
             None,
             custom_glossary=custom_glossary,
+            source_language=source_language,
+            domain_profile=domain_profile,
         )
         if plain_result["success"]:
             sections = {k: "" for k in COA_FIELD_KEYS}
@@ -380,9 +461,16 @@ def _translate_structured(
         return _error_result(str(e), model)
 
 
-def _build_combined_glossary(custom_glossary: str = "") -> str:
+def _build_combined_glossary(
+    custom_glossary: str = "",
+    source_language: str = "auto",
+    domain_profile: str = "combined",
+) -> str:
     """Merge built-in glossary with optional user-provided glossary."""
-    base = get_glossary_prompt_section().strip()
+    base = get_glossary_prompt_section(
+        source_language=source_language,
+        domain_profile=domain_profile,
+    ).strip()
     user = (custom_glossary or "").strip()
     if not user:
         return base
