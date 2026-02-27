@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "npm ci --prefix frontend && npm run build --prefix frontend",
+  "outputDirectory": "frontend/dist",
+  "routes": [
+    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
